@@ -124,3 +124,46 @@ print("singles", sc_result.singles)
 
 ## License
 The structure_clustering package is licensed under the MIT License. See the [LICENSE file](LICENSE) for more details.
+
+## Contribute
+
+Local development requires C++, CMake, and Python with `setuptools`.
+
+To compile only the C++ code with CMake, run:
+
+```bash
+mkdir build
+cd build
+cmake ..
+cmake --build .
+```
+
+For the full build process (Python and C++), a Python virtual environment is highly recommended. Most systems will not allow installation without one.
+
+_This tutorial assumes a WSL environment, but all WSL commands can also be executed on most other Linux systems._
+
+Start from the project root folder (no `build` folder required).
+
+Create a virtual environment inside the WSL filesystem (outside of the mounted Windows filesystem, otherwise performance will be very poor):
+
+```bash
+python -m venv ~/venvs/structure_clustering_dev
+```
+
+Activate the virtual environment:
+
+```bash
+source ~/venvs/structure_clustering_dev/bin/activate
+```
+
+Then install the package with:
+
+```bash
+pip install .
+```
+
+You can now iteratively change the code (either C++ or Python files) and test it using a Python script executed from the same virtual environment (most easily from the project folder).
+
+Reminder: If you add a new method or property, you must also expose it in the `main.cpp` pybind11 definitions.
+
+Pushing to the main branch will trigger the Github Action script, which builds the Python wheels for a matrix of platforms and Python versions.
