@@ -170,8 +170,8 @@ atom indices for first fragment [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12]
 atom indices for second fragment [8, 9]
 ```
 
-<!-- Example structure with index `5`:
-![Structure Clustering example with two fragments](add image here) -->
+Example structure with index `5`:
+![Structure Clustering example with two fragments](https://github.com/user-attachments/assets/8b3560e8-c334-4ac5-beac-e7ee47e2633d)
 
 ## License
 
