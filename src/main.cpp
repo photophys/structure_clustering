@@ -27,6 +27,9 @@ PYBIND11_MODULE(_core, m) {
         .def("addAtom", &Structure::addAtom)
         .def_property_readonly("numConnections", &Structure::getNumConnections)
         .def_property_readonly("numAtoms", &Structure::numAtoms)
+        .def_property_readonly("numFragments", &Structure::getNumFragments)
+        .def("getHash", &Structure::getHash)
+        .def("getFragmentAtomIndices", &Structure::getFragmentAtomIndices)
         .def("getAtom", &Structure::getAtom);
 
     py::class_<Atom>(m, "Atom")

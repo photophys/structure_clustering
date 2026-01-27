@@ -35,6 +35,11 @@ public:
     const bool isGraphFullyConnected() const;
 
     void constructGraph(const Machine &machine);
+
+    const std::string getHash() const;
+
+    const int getNumFragments() const;
+    const std::vector<int> getFragmentAtomIndices(int fragmentIndex) const;
 };
 
 #endif

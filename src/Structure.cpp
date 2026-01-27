@@ -11,6 +11,7 @@
 #include "Atom.hpp"
 #include "Machine.hpp"
 #include "Structure.hpp"
+#include "hash.hpp"
 
 double distance(const Atom &atom_a, const Atom &atom_b) {
     return sqrt(pow(atom_b.position().x() - atom_a.position().x(), 2) +
@@ -68,3 +69,136 @@ void Structure::constructGraph(const Machine &machine) {
         }
     }
 };
+
+/**
+ * Compute a hash value that represents the structure of a graph.
+ *
+ * The hash is intended to be invariant to vertex ordering and
+ * sensitive to local neighborhood structure.
+ *
+ * Weisfeiler-Lehman (WL) refinement:
+ * Graphs do not have a natural ordering of vertices. WL refinement creates a canonical,
+ * order-independent description of a graph’s structure.
+ * 1) Start with simple labels (element names, not unique).
+ * 2) Repeatedly update each label using:
+ *    - the current label of the vertex
+ *    - the multiset of neighbor labels (https://en.wikipedia.org/wiki/Multiset)
+ * 3) After several iterations, vertices with different local structures almost always
+ * have different labels.
+ * https://en.wikipedia.org/wiki/Weisfeiler_Leman_graph_isomorphism_test
+ *
+ * @param g           The input graph
+ * @param iterations  Number of WL refinement iterations (controls locality depth)
+ * @return            A hash representing the graph structure
+ */
+std::size_t hash_graph(const Graph& g, std::size_t iterations = 10)
+{
+    // Access the vertex "name" property
+    auto name = get(boost::vertex_name, g);
+    
+    // One label per vertex (labels are refined over iterations)
+    std::vector<std::string> labels(num_vertices(g));
+
+    // --- Initial labeling ---
+    // Each vertex starts with the element name
+    for (auto v : boost::make_iterator_range(vertices(g)))
+        labels[v] = name[v];
+
+    // --- Weisfeiler-Lehman refinement ---
+    // Each iteration updates vertex labels based on:
+    //   - the current label of the vertex
+    //   - the multiset of labels of its neighbors
+    // (That means: Two vertices become distinguishable if
+    // their neighborhoods differ.)
+    for (std::size_t it = 0; it < iterations; ++it) {
+        std::vector<std::string> new_labels(labels.size());
+
+        for (auto v : boost::make_iterator_range(vertices(g))) {
+            std::vector<std::string> neigh;
+
+            // Collect labels of neighboring vertices
+            for (auto u : boost::make_iterator_range(adjacent_vertices(v, g)))
+                neigh.push_back(labels[u]);
+
+            // Sort to make the neighborhood representation independent of order
+            std::sort(neigh.begin(), neigh.end());
+
+            // Combine the vertex label and its neighborhood into a single string
+            // Example: C(H,H,O)
+            std::ostringstream oss;
+            oss << labels[v] << "(";
+            for (auto& n : neigh)
+                oss << n << ",";
+            oss << ")";
+
+            new_labels[v] = oss.str();
+        }
+
+        // Replace old labels with refined labels
+        labels.swap(new_labels);
+    }
+
+    // --- Canonization ---
+    // The final graph representation is a sorted multiset of vertex labels.
+    // Sorting removes dependence on vertex indices.
+    // https://en.wikipedia.org/wiki/Graph_canonization
+    std::sort(labels.begin(), labels.end());
+
+    std::ostringstream canonical;
+    for (auto& l : labels)
+        canonical << l << ";";
+
+    // Get the hash (this hash is of type size_t - useful for fast lookup)
+    return std::hash<std::string>{}(canonical.str());
+}
+
+/**
+ * Return a hexadecimal string representing the structure hash.
+ *
+ * Internally, it computes a graph hash using WL refinement and converts
+ * it to a fixed-width hexadecimal string.
+ * 
+ * @return Structure hash
+ */
+const std::string Structure::getHash() const {
+    std::uint64_t h = static_cast<std::uint64_t>(hash_graph(_graph));
+    return to_hex_string(h);
+}
+
+/**
+ * Compute the number of fragments (Boost: connected components) in the graph.
+ *
+ * @return Number of connected components
+ */
+const int Structure::getNumFragments() const {
+    std::vector<int> component(boost::num_vertices(_graph));
+    return boost::connected_components(_graph, &component[0]);
+}
+
+/**
+ * Return the vertex indices belonging to a specific fragment
+ * (Boost: connected component).
+ *
+ * @param fragmentIndex Index of the fragment
+ * @return              List of vertex indices in that fragment
+ */
+const std::vector<int> Structure::getFragmentAtomIndices(int fragmentIndex) const
+{
+    const std::size_t n = boost::num_vertices(_graph);
+
+    // Component index for each vertex
+    std::vector<int> component(n);
+    boost::connected_components(_graph, component.data());
+
+    std::vector<int> atomIndices;
+    atomIndices.reserve(n);
+
+    // Collect vertices that belong to the requested component
+    for (std::size_t v = 0; v < n; ++v) {
+        if (component[v] == fragmentIndex) {
+            atomIndices.push_back(static_cast<int>(v));
+        }
+    }
+
+    return atomIndices;
+}

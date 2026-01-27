@@ -6,24 +6,25 @@
 
 [^1]: The figure shows exemplary clusters from Ag⁺(H₂O)₄ structures.
 
-
 ## Installation
 
 You can install structure_clustering via pip:
+
 ```bash
 pip install structure_clustering
 ```
 
 Prebuilt wheels are available for most platforms (Windows, Linux, MacOS). If you prefer to compile and build the wheel yourself, ensure that the [Boost Graph Library](https://www.boost.org/doc/libs/release/libs/graph/doc/index.html) is installed system-wide.
 
-
 ## Using the Command-Line Interface
+
 You can invoke the structure_clustering script using the `structure_clustering` command.
 
 <details>
   <summary>Use this method if the command does not work</summary>
 
-  On some systems, scripts installed via pip are not added to the system's `PATH`. You can either [add](https://stackoverflow.com/a/70680333/17726525) them to your `PATH`, or run the script directly by invoking `python3 -m structure_clustering`.
+On some systems, scripts installed via pip are not added to the system's `PATH`. You can either [add](https://stackoverflow.com/a/70680333/17726525) them to your `PATH`, or run the script directly by invoking `python3 -m structure_clustering`.
+
 </details>
 
 ```bash
@@ -42,10 +43,13 @@ options:
 ```
 
 For example, to cluster an xyz file:
+
 ```bash
 structure_clustering my_structures.xyz
 ```
+
 To specify a custom distance for recognising O-H connectivity (see the next section), use a TOML config file:
+
 ```bash
 structure_clustering my_structures.xyz --config sc_config.toml
 ```
@@ -53,6 +57,7 @@ structure_clustering my_structures.xyz --config sc_config.toml
 In both cases, a file named `my_structures.xyz.sc.dat` will be created, which you can import at <a href="https://photophys.github.io/cluster-vis/"><img src="https://raw.githubusercontent.com/photophys/MOLGA.jl/refs/heads/main/docs/src/assets/logo.svg" height="15px" /> https://photophys.github.io/cluster-vis/</a> to visualise the results of your clustering process.
 
 The terminal output will look like this:
+
 ```
 Loading configuration from demo_config.toml
 Using covalent radius of 1.59 for Ag
@@ -72,9 +77,10 @@ Writing output file to structures.xyz.sc.dat ...
 🚀 Open https://photophys.github.io/cluster-vis/ to visualize your results
 ```
 
-
 ## Configuration File
+
 You can use a TOML file to control the parameters of the command-line interface. The `[covalent]` section allows you to override the algorithm's default covalent radii. In the `[pair]` section, you can specify a maximum distance for pairs of atoms.
+
 ```toml
 [covalent]
 He = 0.9
@@ -86,10 +92,13 @@ O-H = 2.3
 [options]
 only_connected_graphs = true
 ```
+
 All settings are optional. Distances are given in Angstrom. Elements are case-sensitive. If you specify `only_connected_graphs` in the config file, this will overwrite your setting from the command-line switch.
 
-
 ## Example Code
+
+### Simple Example
+
 ```py
 import structure_clustering
 from structure_clustering import Structure, Atom
@@ -121,8 +130,51 @@ print("singles", sc_result.singles)
 # singles [9, 16, 22]
 ```
 
+### Use Structure Hashing to Keep Track of Clusters Across Multiple Program Runs
+
+Graphs do not have a natural ordering of vertices. [Weisfeiler-Lehman](https://en.wikipedia.org/wiki/Weisfeiler_Leman_graph_isomorphism_test) (WL) refinement creates a canonical, order-independent description of a graph’s structure.
+
+1. Start with simple labels (element names, not unique).
+2. Repeatedly update each label using:
+   - the current label of the vertex
+   - the [multiset](https://en.wikipedia.org/wiki/Multiset) of neighbor labels
+3. After several iterations, vertices with different local structures almost always
+   have different labels.
+
+Assuming you have already clustered your structures, you have access to the following properties and methods:
+
+```py
+structures = sc_result.structures
+
+structure = structures[5]  # as example
+print("num atoms", structure.numAtoms)
+print("first atomic number", structure.getAtom(0).atomic_number)
+print("first atom pos x", structure.getAtom(0).position.x)
+print("num connections", structure.numConnections)
+print("num fragments", structure.numFragments)
+print("hash", structure.getHash())
+print("atom indices for first fragment", structure.getFragmentAtomIndices(0))
+print("atom indices for second fragment", structure.getFragmentAtomIndices(1))
+```
+
+The output will look like this:
+
+```
+num atoms 13
+first atomic number 8
+first atom pos x 2.026548
+num connections 11
+num fragments 2
+hash 0504d8ff3dc965c0
+atom indices for first fragment [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12]
+atom indices for second fragment [8, 9]
+```
+
+<!-- Example structure with index `5`:
+![Structure Clustering example with two fragments](add image here) -->
 
 ## License
+
 The structure_clustering package is licensed under the MIT License. See the [LICENSE file](LICENSE) for more details.
 
 ## Contribute
