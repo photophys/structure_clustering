@@ -22,6 +22,7 @@ void Machine::setCovalentRadius(int atomicNumber, double radius) {
 
 void Machine::addPairDistance(int atomicNumberA, int atomicNumberB, double maxDistance) {
     _pairDistances[{atomicNumberA, atomicNumberB}] = maxDistance;
+    _pairDistances[{atomicNumberB, atomicNumberA}] = maxDistance;
 }
 
 bool Machine::isOnlyConnectedGraphs() const { return _onlyConnectedGraphs; }
