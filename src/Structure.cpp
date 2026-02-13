@@ -62,8 +62,10 @@ void Structure::constructGraph(const Machine &machine) {
             double r_b = machine.getCovalentRadius(atomicNumberB);
             double maxPairDistance = machine.getMaxPairDistance(atomicNumberA, atomicNumberB);
 
-            if (isConnected(r_a, r_b, distance_ab) || (distance_ab <= maxPairDistance)) {
-
+            if (
+                (maxPairDistance == -1 && isConnected(r_a, r_b, distance_ab)) || 
+                (distance_ab <= maxPairDistance)
+            ) {
                 boost::add_edge(vertex_descriptors[i], vertex_descriptors[j], _graph);
             }
         }
