@@ -16,6 +16,12 @@ pip install structure_clustering
 
 Prebuilt wheels are available for most platforms (Windows, Linux, MacOS). If you prefer to compile and build the wheel yourself, ensure that the [Boost Graph Library](https://www.boost.org/doc/libs/release/libs/graph/doc/index.html) is installed system-wide.
 
+If you want to upgrade to the latest available version, run
+
+```bash
+pip install structure_clustering --upgrade
+```
+
 ## Using the Command-Line Interface
 
 You can invoke the structure_clustering script using the `structure_clustering` command.
