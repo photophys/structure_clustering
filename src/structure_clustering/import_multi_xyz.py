@@ -23,48 +23,73 @@ def element_to_atomic_number(symbol):
 
 def import_multi_xyz(file_path):
     """
-    Reads a multi-XYZ file and returns the data as a list of dictionaries.
+    Multi-XYZ parser.
 
-    Each dictionary represents a frame and contains:
-    - 'atom_count': the number of atoms in the frame
-    - 'atoms': a list of tuples, each containing (element, x, y, z)
-
-    Args:
-    - file_path (str): Path to the multi-XYZ file
-
-    Returns:
-    - List of dictionaries, where each dictionary represents a frame
+    Per frame:
+      1) atom count (int)
+      2) comment line (ignored)
+      3) N coordinate lines: "Element x y z" (extra trailing tokens ignored)
+      4) next frame begins only after at least one blank line
     """
     structures = []
-    current_structure = None
 
-    with open(file_path, "r") as file:
-        lines = file.readlines()
+    with open(file_path, "r") as f:
+        lines = f.readlines()
 
     i = 0
-    while i < len(lines):
-        line = lines[i].strip()
+    n = len(lines)
 
-        # check if line is a number indicating the number of atoms
-        if line.isdigit():
-            if current_structure:
-                structures.append(current_structure)
-            current_structure = Structure(i)
+    while i < n:
+        # find the next atom-count line (skipping leading blank lines)
+        while i < n and not lines[i].strip():
+            i += 1
+        if i >= n:
+            break
 
-        # otherwise, process atom lines
+        count_line = lines[i].strip()
+        if not count_line.isdigit():
+            # tolerate stray text; keep scanning
+            i += 1
+            continue
+
+        atom_count = int(count_line)
+        start_idx = i
+        i += 1  # move past atom count
+
+        # skip the comment line (also if empty)
+        if i < n:
+            i += 1
+
+        s = Structure(start_idx)
+
+        # read exactly atom_count atom lines (skipping blank lines if they appear)
+        atoms_read = 0
+        while i < n and atoms_read < atom_count:
+            line = lines[i].strip()
+            i += 1
+            if not line:
+                continue
+
+            parts = line.split()
+            if len(parts) < 4:
+                continue  # or raise ValueError if you prefer strict parsing
+
+            elem = parts[0]
+            x, y, z = map(float, parts[1:4])
+            s.addAtom(Atom(element_to_atomic_number(elem), x, y, z))
+            atoms_read += 1
+
+        # only accept complete frames
+        if atoms_read == atom_count:
+            structures.append(s)
         else:
-            if current_structure:
-                parts = line.split()
-                if len(parts) == 4:
-                    x, y, z = map(float, parts[1:])
-                    current_structure.addAtom(
-                        Atom(element_to_atomic_number(parts[0]), x, y, z)
-                    )
+            break  # incomplete last frame
 
-        i += 1
-
-    # append the last structure
-    if current_structure:
-        structures.append(current_structure)
+        # require at least one blank line before next structure;
+        # consume non-blank junk until we see a blank, then consume all blanks.
+        while i < n and lines[i].strip():
+            i += 1
+        while i < n and not lines[i].strip():
+            i += 1
 
     return structures
