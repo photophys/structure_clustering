@@ -1,4 +1,4 @@
-# structure-clustering – Fast Exact Clustering of Similar Molecular Structures through Parameterized Connectivity Graphs
+# structure-clustering – Fast Exact Clustering of Molecular Structures through Parameterized Connectivity Graphs
 
 **structure-clustering** groups molecular geometries by their distance-derived connectivity.
 
@@ -29,6 +29,9 @@ structure_clustering structures.xyz
 ```
 
 By default, only structures with fully connected graphs are clustered; structures with disconnected graphs are sorted out. The command writes the clustered structures to the [Chemcraft](https://www.chemcraftprog.com/)-compatible file `sc.chemcraft.chd`.
+
+<img width="427" height="325" alt="Chemcraft visualization demo" src="https://github.com/user-attachments/assets/0a75b40f-b593-45ce-be1a-2e2e8ce6b77c" /><br/>
+
 
 To choose another Chemcraft output path:
 ```bash
