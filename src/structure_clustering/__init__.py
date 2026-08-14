@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from ._core import __doc__, __version__, Machine, Structure, Atom
 
 from structure_clustering.import_multi_xyz import (

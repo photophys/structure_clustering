@@ -19,6 +19,7 @@ public:
     void addCluster(const std::vector<int> structureIdxs);
 
     void exportDat(const std::string filepath) const;
+    void exportChemcraft(const std::string filepath) const;
 
     std::vector<std::vector<int>> getClusters() const;
     std::vector<int> getSingles() const;

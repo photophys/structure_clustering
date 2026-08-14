@@ -44,6 +44,7 @@ PYBIND11_MODULE(_core, m) {
 
     py::class_<Result>(m, "Result")
         .def("export", &Result::exportDat)
+        .def("exportChemcraft", &Result::exportChemcraft)
         .def_property_readonly("clusters", &Result::getClusters)
         .def_property_readonly("singles", &Result::getSingles)
         .def_property_readonly("structures", &Result::getStructures);

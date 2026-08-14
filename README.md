@@ -1,227 +1,254 @@
-# structure_clustering &ndash; Cluster Molecular Structures Into Groups of Similar Ones
+# structure-clustering – Fast Exact Clustering of Similar Molecular Structures through Parameterized Connectivity Graphs
 
-**structure_clustering** is a Python package to cluster molecular structures into groups of similar ones. Our approach involves analysing the intermolecular distances to represent each structure's connectivity as an undirected, vertex-labelled graph. It then uses graph isomorphism to identify structures that belong to the same group. The package offers a command-line interface for clustering a multi-XYZ file or can be used within your Python code.
+**structure-clustering** groups molecular geometries by their distance-derived connectivity.
 
-<img src="https://github.com/user-attachments/assets/fef206d6-e039-49ce-911d-627068841853" width="50%" />[^1]
+For each structure, the algorithm builds an undirected graph in which atoms are element-labelled vertices and connected atoms are edges. Structures are assigned the same cluster only when their graphs are exactly isomorphic. Fast graph signatures and Weisfeiler–Lehman refinement are used to reduce the number of expensive isomorphism checks. The edges describe the molecule's connectivity, not it's bonds.
 
-[^1]: The figure shows exemplary clusters from Ag⁺(H₂O)₄ structures.
+<img src="https://github.com/user-attachments/assets/fef206d6-e039-49ce-911d-627068841853" width="50%" alt="Example clusters of Ag+(H2O)4 structures" />
+
 
 ## Installation
 
-You can install structure_clustering via pip:
-
+Install the package from PyPI:
 ```bash
 pip install structure_clustering
 ```
 
-Prebuilt wheels are available for most platforms (Windows, Linux, MacOS). If you prefer to compile and build the wheel yourself, ensure that the [Boost Graph Library](https://www.boost.org/doc/libs/release/libs/graph/doc/index.html) is installed system-wide.
+Upgrade an existing installation with:
+```bash
+pip install --upgrade structure_clustering
+```
 
-If you want to upgrade to the latest available version, run
+Prebuilt wheels are available for common platforms. Building from source requires a C++17 compiler and the [Boost Graph Library](https://github.com/boostorg/graph) headers.
+
+## Quick start
+
+Cluster a multi-XYZ file:
+```bash
+structure_clustering structures.xyz
+```
+
+By default, only structures with fully connected graphs are clustered; structures with disconnected graphs are sorted out. The command writes the clustered structures to the [Chemcraft](https://www.chemcraftprog.com/)-compatible file `sc.chemcraft.chd`.
+
+To choose another Chemcraft output path:
+```bash
+structure_clustering structures.xyz -ec results.chemcraft.chd
+```
+
+To write only a deduplicated set of structures, use `--representatives-only`:
+```bash
+structure_clustering structures.xyz --representatives-only
+```
+
+This keeps the first structure from each cluster and all unique singles in the exported file. Clustering itself is unchanged; the option only filters the written output. If native output is requested with `-e`, the same filtering is applied there as well.
+
+The native clustering format is optional and can be written in addition:
+```bash
+structure_clustering structures.xyz -e
+```
+
+This writes `sc.dat` alongside the default `sc.chemcraft.chd`. To choose paths for both outputs:
+```bash
+structure_clustering structures.xyz -e results.dat -ec results.chemcraft.chd
+```
+
+The native `.dat` output can be visualized with [cluster-vis](https://photophys.github.io/cluster-vis/).
+
+## Command-line interface
+
+```text
+usage: structure_clustering [-h] [--disconnected] [--config CONFIG]
+                            [-e [FILE]] [-ec [FILE]]
+                            [--representatives-only]
+                            xyz_file
+```
+
+Options:
+
+- `xyz_file`: multi-XYZ file containing the input structures.
+- `--config CONFIG`: TOML file with connectivity settings.
+- `--disconnected`: include disconnected graphs in clustering. By default, disconnected structures are sorted out. An explicit CLI flag overrides `options.only_connected_graphs` from the TOML file.
+- `-e [FILE]`, `--export [FILE]`: additionally write the native clustering output. Without a filename, uses `sc.dat`.
+- `-ec [FILE]`, `--export-chemcraft [FILE]`: set the Chemcraft-compatible output path. Chemcraft output is written by default to `sc.chemcraft.chd`. Note that the file extension needs to be **`.chd`**, otherwise Chemcraft will not read it properly.
+- `--representatives-only`: export only the first structure from each cluster, plus all unique single structures. This affects both Chemcraft and native output and does not change clustering itself.
+- `-h`, `--help`: show the command-line help.
+
+If the installed `structure_clustering` command is not on your `PATH`, use:
 
 ```bash
-pip install structure_clustering --upgrade
+python -m structure_clustering structures.xyz
 ```
 
-## Using the Command-Line Interface
-
-You can invoke the structure_clustering script using the `structure_clustering` command.
-
-<details>
-  <summary>Use this method if the command does not work</summary>
-
-On some systems, scripts installed via pip are not added to the system's `PATH`. You can either [add](https://stackoverflow.com/a/70680333/17726525) them to your `PATH`, or run the script directly by invoking `python3 -m structure_clustering`.
-
-</details>
+### Example
 
 ```bash
-usage: structure_clustering <xyz_file> [--config CONFIG] [--output OUTPUT] [--disconnected]
-
-Cluster molecular structures into groups.
-
-positional arguments:
-  xyz_file         path of the multi-xyz-file containing the structures
-
-options:
-  --config CONFIG  path of the config TOML file
-  --output OUTPUT  path of the resulting output file, defaults to <xyz_file>.sc.dat
-  --disconnected   if you want to include disconnected graphs
-  -h, --help       show this help message and exit
+structure_clustering structures.xyz -ec clusters.chd --representatives-only
 ```
 
-For example, to cluster an xyz file:
+A typical run reports the number of clusters and singles, the number of structures sorted out, cluster-size statistics, and connectivity statistics. In the default connected-only mode, the sorted-out count includes disconnected structures as well as redundant members removed when one representative per cluster is retained.
 
-```bash
-structure_clustering my_structures.xyz
+## Connectivity model and configuration
+
+Connectivity is derived from interatomic distances.
+
+For atom pairs without a dedicated pair-distance rule, atoms are connected when
+```math
+0.8\,\text{Å} < d < r(A) + r(B) + 0.4\,\text{Å,}
 ```
+where $d$ is the distance between the atoms $A$ and $B$, with their covalent radii $r(A)$ and $r(B)$.
 
-To specify a custom distance for recognising O-H connectivity (see the next section), use a TOML config file:
+A pair-specific distance replaces that rule for the selected element pair. The CLI defines an O–H maximum distance of 2.3 Å by default; it can be replaced in the configuration file.
 
-```bash
-structure_clustering my_structures.xyz --config sc_config.toml
-```
-
-In both cases, a file named `my_structures.xyz.sc.dat` will be created, which you can import at <a href="https://photophys.github.io/cluster-vis/"><img src="https://raw.githubusercontent.com/photophys/MOLGA.jl/refs/heads/main/docs/src/assets/logo.svg" height="15px" /> https://photophys.github.io/cluster-vis/</a> to visualise the results of your clustering process.
-
-The terminal output will look like this:
-
-```
-Loading configuration from demo_config.toml
-Using covalent radius of 1.59 for Ag
-Using pair distance of 2.3 for O-H
-Clustering does not include disconnected graphs
-
-Using 437 structures from structures.xyz
-Clustering finished <structure_clustering._core.Result object at 0x7f7c949c37b0>
-  14 clusters (total 318 structures)
-  13 unique single structures
-  132 (30.21%) structures sorted out (305 remaining)
-  cluster size: Avg=22.7 Med=4.5 Q1=2.2 Q3=23.5
-  connections/structure: Avg=12.2 Med=12.0 Q1=12.0 Q3=12.0 (all 437)
-  connections/structure: Avg=12.4 Med=12.0 Q1=12.0 Q3=12.0 (remaining 305)
-Writing output file to structures.xyz.sc.dat ...
-
-🚀 Open https://photophys.github.io/cluster-vis/ to visualize your results
-```
-
-## Configuration File
-
-You can use a TOML file to control the parameters of the command-line interface. The `[covalent]` section allows you to override the algorithm's default covalent radii. In the `[pair]` section, you can specify a maximum distance for pairs of atoms.
+Example `sc_config.toml`:
 
 ```toml
 [covalent]
-He = 0.9
+He = 0.90
 Ag = 1.59
 
 [pair]
-O-H = 2.3
+O-H = 2.30
 
 [options]
 only_connected_graphs = true
 ```
 
-All settings are optional. Distances are given in Angstrom. Elements are case-sensitive. If you specify `only_connected_graphs` in the config file, this will overwrite your setting from the command-line switch.
+All sections and entries are optional:
 
-## Example Code
+- `[covalent]` overrides the default covalent radius of an element.
+- `[pair]` defines a maximum distance for a specific unordered atom pair. `O-H` and `H-O` therefore refer to the same pair.
+- `[options].only_connected_graphs` controls whether disconnected graphs are eligible for clustering.
 
-### Simple Example
+Distances are in Ångström and element symbols are case-sensitive.
 
-```py
-import structure_clustering
-from structure_clustering import Structure, Atom
+### Connected vs. disconnected graphs
 
-sc_machine = structure_clustering.Machine()
+Connected-only clustering is the default. In this mode, a disconnected input structure is **sorted out entirely**: it is not compared with other structures and does not appear in either `result.clusters` or `result.singles`.
 
-sc_machine.setCovalentRadius(1, 0.42)  # change hydrogen covalent radius to 0.42
-sc_machine.addPairDistance(8, 1, 2.3)  # extend max distance for O-H pairs to 2.3 Ang
+Use `--disconnected` to include disconnected structures in clustering by graph topology. With that option enabled, disconnected structures can appear in clusters or as singles just like connected structures.
 
-sc_machine.setOnlyConnectedGraphs(True)  # only include fully connected graphs (default)
+## How clustering works
 
-# you will need some structures
-population = structure_clustering.import_multi_xyz("structs.xyz")
+For each input structure, `structure_clustering`:
 
-# you can also create your structures programmatically
-structure = Structure()
-structure.addAtom(Atom(8, -1.674872668, 0.0, -0.984966492))
-structure.addAtom(Atom(1, -1.674872668, 0.759337, -0.388923492))
-structure.addAtom(Atom(1, -1.674872668, -0.759337, -0.388923492))
-population += [structure]  # add this structure to our population
+1. Builds an undirected, element-labelled connectivity graph from the geometry.
+2. Computes inexpensive graph descriptors such as vertex/edge counts, element counts, element-degree combinations, and connected-component sizes.
+3. Applies WL refinement to obtain order-independent vertex colours and a compact graph signature.
+4. Buckets structures with matching signatures.
+5. Runs exact Boost graph-isomorphism checks only inside the surviving buckets.
 
-sc_result = sc_machine.cluster(population)
+The signatures and WL hashes are **filters, not proofs of graph identity**. Final cluster membership still requires exact labelled graph isomorphism.
 
-print("clusters", sc_result.clusters)
-print("singles", sc_result.singles)
-
-# Output (indices from the original structure list):
-# clusters [[0, 11], [1, 2, 4, 6, 12, 13, 14, 15, 19], [3, 17, 18, 23]]
-# singles [9, 16, 22]
-```
-
-### Use Structure Hashing to Keep Track of Clusters Across Multiple Program Runs
+This makes the current implementation conceptually different from the previous version, which compared each structure against existing cluster representatives much more broadly. The new approach moves most rejection work into reusable signatures and reserves exact isomorphism for plausible matches.
 
 Graphs do not have a natural ordering of vertices. [Weisfeiler-Lehman](https://en.wikipedia.org/wiki/Weisfeiler_Leman_graph_isomorphism_test) (WL) refinement creates a canonical, order-independent description of a graph’s structure.
 
-1. Start with simple labels (element names, not unique).
-2. Repeatedly update each label using:
-   - the current label of the vertex
-   - the [multiset](https://en.wikipedia.org/wiki/Multiset) of neighbor labels
-3. After several iterations, vertices with different local structures almost always
-   have different labels.
+## Python API
 
-Assuming you have already clustered your structures, you have access to the following properties and methods:
+### Cluster structures from a multi-XYZ file
 
-```py
-structures = sc_result.structures
+```python
+import structure_clustering
 
-structure = structures[5]  # as example
-print("num atoms", structure.numAtoms)
-print("first atomic number", structure.getAtom(0).atomic_number)
-print("first atom pos x", structure.getAtom(0).position.x)
-print("num connections", structure.numConnections)
-print("num fragments", structure.numFragments)
-print("hash", structure.getHash())
-print("atom indices for first fragment", structure.getFragmentAtomIndices(0))
-print("atom indices for second fragment", structure.getFragmentAtomIndices(1))
+machine = structure_clustering.Machine()
+
+# Optional connectivity overrides.
+machine.setCovalentRadius(1, 0.42)
+machine.addPairDistance(8, 1, 2.30)
+machine.setOnlyConnectedGraphs(True)
+
+structures = structure_clustering.import_multi_xyz("structures.xyz")
+result = machine.cluster(structures)
+
+print("clusters:", result.clusters)
+print("singles:", result.singles)
 ```
 
-The output will look like this:
+`result.clusters` contains the clusters (groups), `result.singles` contains eligible structures that have no clustered equivalent. When connected-only mode is active, disconnected structures are excluded from both collections.
 
-```
-num atoms 13
-first atomic number 8
-first atom pos x 2.026548
-num connections 11
-num fragments 2
-hash 0504d8ff3dc965c0
-atom indices for first fragment [0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12]
-atom indices for second fragment [8, 9]
+The indices in `clusters` and `singles` are **zero-based indices into the original input structure list**, so skipped disconnected structures can create gaps in the reported indices. Do not rely on the ordering of the cluster list itself.
+
+### Create a structure programmatically
+
+```python
+from structure_clustering import Atom, Structure
+
+structure = Structure(0)
+structure.addAtom(Atom(8, -1.674872668,  0.000000, -0.984966492))
+structure.addAtom(Atom(1, -1.674872668,  0.759337, -0.388923492))
+structure.addAtom(Atom(1, -1.674872668, -0.759337, -0.388923492))
 ```
 
-Example structure with index `5`:
+The integer passed to `Structure(...)` is the structure's stored ID; cluster membership is still reported using the structure's position in the input list.
+
+### Inspect clustered structures
+
+After clustering, graph-derived information is available through `result.structures`:
+
+```python
+structure = result.structures[5]
+
+print("atoms:", structure.numAtoms)
+print("connections:", structure.numConnections)
+print("fragments:", structure.numFragments)
+print("hash:", structure.getHash())
+
+first_atom = structure.getAtom(0)
+print("atomic number:", first_atom.atomic_number)
+print("x coordinate:", first_atom.position.x)
+
+print("fragment 0 atom indices:", structure.getFragmentAtomIndices(0))
+```
+
+### Export from Python
+
+```python
+result.export("clusters.dat")
+result.exportChemcraft("clusters.chemcraft.xyz")
+```
+
+The native `.dat` format contains cluster groups, singles, graph edges, and geometries. Group and structure numbers written to that format are one-based, while the Python result indices are zero-based.
+
+## Structure hashes
+
+`Structure.getHash()` returns a 16-character hexadecimal WL-style graph hash. The implementation uses deterministic 64-bit [FNV-1a-based](https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function) mixing, so the hash does not depend on Python's process-randomized hashing or C++ `std::hash` implementation details.
+
+The hash is independent of vertex ordering and useful for keeping track of clusters across multiple program runs (e.g., molecular dynamics simulations). It is not a substitute for exact graph isomorphism: hash collisions and WL-indistinguishable non-isomorphic graphs are possible but very unlikely. 
+
+Example:
+
+```text
+0504d8ff3dc965c0
+```
+
+Example structure with two connected components:
+
 ![Structure Clustering example with two fragments](https://github.com/user-attachments/assets/8b3560e8-c334-4ac5-beac-e7ee47e2633d)
 
-## License
+## Changes to v1.1.6
 
-The structure_clustering package is licensed under the MIT License. See the [LICENSE file](LICENSE) for more details.
+- **Significantly improved performance:** graph signatures and integer WL refinement now bucket plausible matches before exact isomorphism, instead of broadly comparing each structure with cluster representatives. Graph isomorphism remains the final equivalence test.
+- **Deterministic hashing:** the previous string-WL approach is replaced by shared integer-WL/FNV-based hashing.
+- **Chemcraft CLI output:** the CLI now writes Chemcraft-compatible output by default.
 
-## Contribute
+*No breaking changes compared to v1.1.6. This version is confirmed to produce the exact same results as v1.1.6.*
 
-Local development requires C++, CMake, and Python with `setuptools`.
+## Development
 
-To compile only the C++ code with CMake, run:
+Local development requires Python, CMake, a C++17 compiler, and Boost headers.
 
-```bash
-mkdir build
-cd build
-cmake ..
-cmake --build .
-```
-
-For the full build process (Python and C++), a Python virtual environment is highly recommended. Most systems will not allow installation without one.
-
-_This tutorial assumes a WSL environment, but all WSL commands can also be executed on most other Linux systems._
-
-Start from the project root folder (no `build` folder required).
-
-Create a virtual environment inside the WSL filesystem (outside of the mounted Windows filesystem, otherwise performance will be very poor):
+Create and activate a virtual environment, then install the project from the repository root:
 
 ```bash
 python -m venv ~/venvs/structure_clustering_dev
-```
-
-Activate the virtual environment:
-
-```bash
 source ~/venvs/structure_clustering_dev/bin/activate
-```
-
-Then install the package with:
-
-```bash
 pip install .
 ```
 
-You can now iteratively change the code (either C++ or Python files) and test it using a Python script executed from the same virtual environment (most easily from the project folder).
+Python bindings are defined in `src/main.cpp`. When adding a new C++ API method or property that should be available from Python, expose it there as well.
 
-Reminder: If you add a new method or property, you must also expose it in the `main.cpp` pybind11 definitions.
+The GitHub Actions workflow builds wheels for the configured Python/platform matrix when the corresponding workflow is triggered.
 
-Pushing to the main branch will trigger the Github Action script, which builds the Python wheels for a matrix of platforms and Python versions.
+## License
+
+**structure-clustering** is distributed under the MIT License. See [LICENSE](LICENSE).

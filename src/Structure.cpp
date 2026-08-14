@@ -1,3 +1,5 @@
+#include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -32,10 +34,12 @@ const Atom &Structure::getAtom(int index) const { return _atoms[index]; }
 const int Structure::getNumConnections() const { return boost::num_edges(_graph); }
 const Graph &Structure::getGraph() const { return _graph; }
 const bool Structure::isGraphFullyConnected() const {
-    std::vector<int> component(boost::num_vertices(_graph));
-    int num = boost::connected_components(_graph, &component[0]);
-    return num == 1;
+    return getNumFragments() == 1;
 }
+
+int Structure::getId() const {
+    return _id;
+};
 
 void Structure::constructGraph(const Machine &machine) {
     // add graph vertices
@@ -45,7 +49,7 @@ void Structure::constructGraph(const Machine &machine) {
     for (std::size_t i = 0; i < this->numAtoms(); ++i) {
         auto vd = boost::add_vertex(_graph);
         vertex_descriptors[i] = vd;
-        vertex_name_map[vd] = this->getAtom(i).atomicNumber();
+        vertex_name_map[vd] = std::to_string(this->getAtom(i).atomicNumber());
     }
 
     // check connectivity and add graph edges
@@ -73,98 +77,17 @@ void Structure::constructGraph(const Machine &machine) {
 };
 
 /**
- * Compute a hash value that represents the structure of a graph.
- *
- * The hash is intended to be invariant to vertex ordering and
- * sensitive to local neighborhood structure.
- *
- * Weisfeiler-Lehman (WL) refinement:
- * Graphs do not have a natural ordering of vertices. WL refinement creates a canonical,
- * order-independent description of a graph’s structure.
- * 1) Start with simple labels (element names, not unique).
- * 2) Repeatedly update each label using:
- *    - the current label of the vertex
- *    - the multiset of neighbor labels (https://en.wikipedia.org/wiki/Multiset)
- * 3) After several iterations, vertices with different local structures almost always
- * have different labels.
- * https://en.wikipedia.org/wiki/Weisfeiler_Leman_graph_isomorphism_test
- *
- * @param g           The input graph
- * @param iterations  Number of WL refinement iterations (controls locality depth)
- * @return            A hash representing the graph structure
- */
-std::size_t hash_graph(const Graph& g, std::size_t iterations = 10)
-{
-    // Access the vertex "name" property
-    auto name = get(boost::vertex_name, g);
-    
-    // One label per vertex (labels are refined over iterations)
-    std::vector<std::string> labels(num_vertices(g));
-
-    // --- Initial labeling ---
-    // Each vertex starts with the element name
-    for (auto v : boost::make_iterator_range(vertices(g)))
-        labels[v] = name[v];
-
-    // --- Weisfeiler-Lehman refinement ---
-    // Each iteration updates vertex labels based on:
-    //   - the current label of the vertex
-    //   - the multiset of labels of its neighbors
-    // (That means: Two vertices become distinguishable if
-    // their neighborhoods differ.)
-    for (std::size_t it = 0; it < iterations; ++it) {
-        std::vector<std::string> new_labels(labels.size());
-
-        for (auto v : boost::make_iterator_range(vertices(g))) {
-            std::vector<std::string> neigh;
-
-            // Collect labels of neighboring vertices
-            for (auto u : boost::make_iterator_range(adjacent_vertices(v, g)))
-                neigh.push_back(labels[u]);
-
-            // Sort to make the neighborhood representation independent of order
-            std::sort(neigh.begin(), neigh.end());
-
-            // Combine the vertex label and its neighborhood into a single string
-            // Example: C(H,H,O)
-            std::ostringstream oss;
-            oss << labels[v] << "(";
-            for (auto& n : neigh)
-                oss << n << ",";
-            oss << ")";
-
-            new_labels[v] = oss.str();
-        }
-
-        // Replace old labels with refined labels
-        labels.swap(new_labels);
-    }
-
-    // --- Canonization ---
-    // The final graph representation is a sorted multiset of vertex labels.
-    // Sorting removes dependence on vertex indices.
-    // https://en.wikipedia.org/wiki/Graph_canonization
-    std::sort(labels.begin(), labels.end());
-
-    std::ostringstream canonical;
-    for (auto& l : labels)
-        canonical << l << ";";
-
-    // Get the hash (this hash is of type size_t - useful for fast lookup)
-    return std::hash<std::string>{}(canonical.str());
-}
-
-/**
  * Return a hexadecimal string representing the structure hash.
  *
- * Internally, it computes a graph hash using WL refinement and converts
- * it to a fixed-width hexadecimal string.
- * 
+ * This is an order-independent WL-style graph signature. It is suitable as a
+ * fast prefilter, but exact isomorphism/canonical labeling is still needed when
+ * correctness must be guaranteed.
+ *
  * @return Structure hash
  */
 const std::string Structure::getHash() const {
-    std::uint64_t h = static_cast<std::uint64_t>(hash_graph(_graph));
-    return to_hex_string(h);
+    const std::size_t h = static_cast<std::size_t>(graph_hash::wl_hash(_graph));
+    return to_hex_string(static_cast<std::uint64_t>(h));
 }
 
 /**

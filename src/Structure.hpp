@@ -11,7 +11,6 @@
 #include <boost/graph/vf2_sub_graph_iso.hpp>
 
 #include "Atom.hpp"
-#include "Machine.hpp"
 
 class Machine; // forward declaration
 
@@ -37,9 +36,12 @@ public:
     void constructGraph(const Machine &machine);
 
     const std::string getHash() const;
+    const std::string getCheapHash() const;
 
     const int getNumFragments() const;
     const std::vector<int> getFragmentAtomIndices(int fragmentIndex) const;
+
+    int getId() const;
 };
 
 #endif

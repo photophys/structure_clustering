@@ -1,9 +1,13 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <stdexcept>
+#include <iomanip>
+#include <iostream>
 
 #include "Result.hpp"
 #include "constants.hpp"
+#include "ChemcraftWriter.hpp"
 
 Result::Result(std::vector<Structure> &structures)
     : _clusters({}), _singles({}), _structures(structures) {};
@@ -68,6 +72,27 @@ void Result::exportDat(const std::string filepath) const {
 
     file.close();
 }
+
+void Result::exportChemcraft(const std::string filepath) const {
+    auto chemcraftFile = ChemcraftWriter(filepath);
+    // write groups
+    for (auto &cluster : _clusters) {
+        chemcraftFile.startCluster(_structures[cluster[0]].getHash());
+        for (auto &id : cluster) {
+            auto &structure = _structures[id];
+            chemcraftFile.writeStructure(structure);
+        }
+    }
+
+    // write singles
+    for (auto &id : _singles) {
+        auto &structure = _structures[id];
+        chemcraftFile.startSingle(structure.getHash());
+        chemcraftFile.writeStructure(structure);
+    }
+
+    chemcraftFile.close();
+};
 
 std::vector<std::vector<int>> Result::getClusters() const { return _clusters; };
 std::vector<int> Result::getSingles() const { return _singles; };
