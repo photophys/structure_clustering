@@ -14,6 +14,7 @@ from structure_clustering import element_to_atomic_number
 DEFAULT_OH_MAX_DISTANCE = 2.3
 DEFAULT_NATIVE_OUTPUT = Path("sc.dat")
 DEFAULT_CHEMCRAFT_OUTPUT = Path("sc.chemcraft.chd")
+DEFAULT_OUTPUT_LIMIT = 10
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -76,11 +77,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--representatives-only",
-        action="store_true",
+        "--export-limit",
+        nargs="?",
+        const=DEFAULT_OUTPUT_LIMIT,
+        default=None,
+        type=int,
+        metavar="N",
         help=(
-            "Export only one representative from each cluster, "
-            "plus all unique single structures."
+            "Limit each cluster to at most N structures in exported files. Without N,"
+            f"defaults to {DEFAULT_OUTPUT_LIMIT}. If omitted, exports all structures."
         ),
     )
 
@@ -223,9 +228,10 @@ def validate_output_paths(
             )
 
 
-def export_representative_chemcraft(
+def export_limited_chemcraft(
     result,
     output_path: Path,
+    limit: int,
 ) -> None:
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_path = Path(temporary_directory) / "full.chemcraft.xyz"
@@ -253,25 +259,27 @@ def export_representative_chemcraft(
             filtered_lines.extend(block)
             continue
 
-        first_geometry_end = next(
-            (
-                line_index
-                for line_index, line in enumerate(block)
-                if line.strip() == "[/geometry]"
-            ),
-            None,
-        )
-        if first_geometry_end is None:
+        geometry_ends = [
+            line_index
+            for line_index, line in enumerate(block)
+            if line.strip() == "[/geometry]"
+        ]
+        if not geometry_ends:
             raise RuntimeError(
-                "Could not identify the first geometry in Chemcraft cluster output."
+                "Could not identify geometries in Chemcraft cluster output."
             )
 
-        filtered_lines.extend(block[: first_geometry_end + 1])
+        if len(geometry_ends) <= limit:
+            filtered_lines.extend(block)
+            continue
+
+        last_geometry_end = geometry_ends[limit - 1]
+        filtered_lines.extend(block[: last_geometry_end + 1])
 
         trailing_geometry = next(
             (
                 line
-                for line in block[first_geometry_end + 1 :]
+                for line in block[last_geometry_end + 1 :]
                 if line.strip() == "[Geometry]"
             ),
             None,
@@ -280,19 +288,19 @@ def export_representative_chemcraft(
             filtered_lines.append(trailing_geometry)
 
         filtered_lines.extend(
-            line for line in block[first_geometry_end + 1 :]
+            line for line in block[last_geometry_end + 1 :]
             if line.strip() == "[/Job]"
         )
 
     output_path.write_text("".join(filtered_lines))
 
 
-def export_representative_native(
+def export_limited_native(
     result,
     output_path: Path,
     clusters: Sequence[Sequence[int]],
     singles: Sequence[int],
-    representative_indices: Sequence[int],
+    export_indices: Sequence[int],
 ) -> None:
     with tempfile.TemporaryDirectory() as temporary_directory:
         temporary_path = Path(temporary_directory) / "full.dat"
@@ -319,13 +327,15 @@ def export_representative_native(
 
     old_to_new = {
         old_index: new_index
-        for new_index, old_index in enumerate(representative_indices, start=1)
+        for new_index, old_index in enumerate(export_indices, start=1)
     }
 
     output_lines = ["@GROUPS\n"]
     for cluster in clusters:
         if cluster:
-            output_lines.append(f"{old_to_new[cluster[0]]}\n")
+            output_lines.append(
+                " ".join(str(old_to_new[index]) for index in cluster) + "\n"
+            )
 
     output_lines.append("@UNIQUES\n")
     output_lines.append(
@@ -333,7 +343,7 @@ def export_representative_native(
     )
 
     for section_type in ("GRAPH", "STRUCTURE"):
-        for new_index, old_index in enumerate(representative_indices, start=1):
+        for new_index, old_index in enumerate(export_indices, start=1):
             if old_index not in sections[section_type]:
                 raise RuntimeError(
                     f"Could not find @{section_type}-{old_index + 1} in native output."
@@ -353,6 +363,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.config is not None and not args.config.is_file():
         parser.error(f"Configuration file does not exist: {args.config}")
+
+    if args.export_limit is not None and args.export_limit < 1:
+        parser.error("--export-limit must be a positive integer.")
 
     validate_output_paths(
         parser,
@@ -468,15 +481,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         f"(remaining {num_remaining_structures})"
     )
 
+    limited_clusters = None
+    limited_export_indices = None
+    if args.export_limit is not None:
+        limited_clusters = [
+            cluster[: args.export_limit]
+            for cluster in clusters
+        ]
+        limited_export_indices = sorted(
+            singles
+            + [
+                structure_index
+                for cluster in limited_clusters
+                for structure_index in cluster
+            ]
+        )
+
     if args.export is not None:
         print(f"\nWriting native output file to {args.export} ...")
-        if args.representatives_only:
-            export_representative_native(
+        if args.export_limit is not None:
+            export_limited_native(
                 result,
                 args.export,
-                clusters,
+                limited_clusters,
                 singles,
-                remaining_indices,
+                limited_export_indices,
             )
         else:
             result.export(str(args.export))
@@ -486,8 +515,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"\nWriting Chemcraft output file to "
             f"{args.export_chemcraft} ..."
         )
-        if args.representatives_only:
-            export_representative_chemcraft(result, args.export_chemcraft)
+        if args.export_limit is not None:
+            export_limited_chemcraft(
+                result,
+                args.export_chemcraft,
+                args.export_limit,
+            )
         else:
             result.exportChemcraft(str(args.export_chemcraft))
 

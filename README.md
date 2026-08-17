@@ -38,12 +38,18 @@ To choose another Chemcraft output path:
 structure_clustering structures.xyz -ec results.chemcraft.chd
 ```
 
-To write only a deduplicated set of structures, use `--representatives-only`:
+To limit the number of exported structures per cluster, use `--export-limit`:
 ```bash
-structure_clustering structures.xyz --representatives-only
+structure_clustering structures.xyz --export-limit
 ```
 
-This keeps the first structure from each cluster and all unique singles in the exported file. Clustering itself is unchanged; the option only filters the written output. If native output is requested with `-e`, the same filtering is applied there as well.
+Without an integer, the limit defaults to 10 structures per cluster. To choose another limit, provide it explicitly, for example:
+```bash
+structure_clustering structures.xyz --export-limit 3
+```
+
+If `--export-limit` is omitted, all structures are exported as usual. Unique singles are always exported, and clustering itself is unchanged. The same limit is applied to both Chemcraft and optional native output. `--export-limit 1` therefore exports one representative from each non-singleton cluster plus all unique singles.
+
 
 The native clustering format is optional and can be written in addition:
 ```bash
@@ -62,7 +68,7 @@ The native `.dat` output can be visualized with [cluster-vis](https://photophys.
 ```text
 usage: structure_clustering [-h] [--disconnected] [--config CONFIG]
                             [-e [FILE]] [-ec [FILE]]
-                            [--representatives-only]
+                            [--export-limit [N]]
                             xyz_file
 ```
 
@@ -73,7 +79,7 @@ Options:
 - `--disconnected`: include disconnected graphs in clustering. By default, disconnected structures are sorted out. An explicit CLI flag overrides `options.only_connected_graphs` from the TOML file.
 - `-e [FILE]`, `--export [FILE]`: additionally write the native clustering output. Without a filename, uses `sc.dat`.
 - `-ec [FILE]`, `--export-chemcraft [FILE]`: set the Chemcraft-compatible output path. Chemcraft output is written by default to `sc.chemcraft.chd`. Note that the file extension needs to be **`.chd`**, otherwise Chemcraft will not read it properly.
-- `--representatives-only`: export only the first structure from each cluster, plus all unique single structures. This affects both Chemcraft and native output and does not change clustering itself.
+- `--export-limit [N]`: limit output of each luster to maximum `N` exported structures. Without `N`, defaults to 10. If the option is omitted, all structures are exported. Unique singles are always included. This affects both Chemcraft and native output and does not change clustering itself.
 - `-h`, `--help`: show the command-line help.
 
 If the installed `structure_clustering` command is not on your `PATH`, use:
@@ -85,7 +91,7 @@ python -m structure_clustering structures.xyz
 ### Example
 
 ```bash
-structure_clustering structures.xyz -ec clusters.chd --representatives-only
+structure_clustering structures.xyz -ec clusters.chd --export-limit
 ```
 
 A typical run reports the number of clusters and singles, the number of structures sorted out, cluster-size statistics, and connectivity statistics. In the default connected-only mode, the sorted-out count includes disconnected structures as well as redundant members removed when one representative per cluster is retained.

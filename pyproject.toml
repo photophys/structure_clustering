@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "structure_clustering"
-version = "1.2.0"
+version = "1.2.1"
 description = "Python package for fast exact clustering of similar molecular structures through parameterized connectivity graphs."
 readme = "README.md"
 authors = [
